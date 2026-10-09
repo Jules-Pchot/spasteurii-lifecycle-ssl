@@ -1,0 +1,24 @@
+{
+  "hooks": {
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/usr/bin/python3 \"/Users/juwul/Desktop/Internship/.claude/hooks/archive_transcript.py\""
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/usr/bin/python3 \"/Users/juwul/Desktop/Internship/.claude/hooks/archive_transcript.py\""
+          }
+        ]
+      }
+    ]
+  }
+}
