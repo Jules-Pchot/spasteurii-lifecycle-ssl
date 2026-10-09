@@ -76,6 +76,7 @@ def main() -> None:
     stamps = [e["timestamp"] for e in entries if e.get("timestamp")]
     date = stamps[0][:10] if stamps else "unknown-date"
     title = next((e.get("aiTitle") for e in reversed(entries) if e.get("aiTitle")), "Claude Code session")
+    title = title.replace('"', "'")  # a double quote would break the YAML header
 
     VAULT_DIR.mkdir(parents=True, exist_ok=True)
     note = VAULT_DIR / f"{date}-{session[:8]}.md"
@@ -88,4 +89,7 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as exc:  # never block Claude Code
+        print(f"archive_transcript: {exc}", file=sys.stderr)

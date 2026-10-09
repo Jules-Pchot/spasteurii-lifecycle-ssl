@@ -4,6 +4,9 @@ __pycache__/
 *.pyc
 .ipynb_checkpoints/
 
+# Claude Code personal settings (permissions granted, etc.); .claude/settings.json is shared and versioned
+.claude/settings.local.json
+
 # macOS
 .DS_Store
 
