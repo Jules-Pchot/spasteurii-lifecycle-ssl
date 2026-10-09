@@ -18,8 +18,9 @@ The work is purely computational on existing microscopy videos — no wet-lab pr
 - Video preprocessing pipeline validated: temporal-median background removal →
   round-object removal (min-area rectangle) → hollow / out-of-focus object removal
   (hole ratio + two-threshold area ratio) → black-on-white mask video.
-- Main script: `Video_Process_Script/Phase Extraction/Napari_Stationary_Process.py`
-- Source videos: `Videosplit/`
+- Main script: `Video_Process_Script/Phase_Extraction/Napari_Stationary_Process.py`
+- Source videos: `Videosplit/` — pipeline outputs: `Processing_Results/<Phase>/`
+- Folder names: no spaces, same phase spelling everywhere (`Expo`, `Stationary`, `Death`).
 - The project is **not** a git repository: never overwrite or rename a file without
   checking first that the destination does not exist.
 

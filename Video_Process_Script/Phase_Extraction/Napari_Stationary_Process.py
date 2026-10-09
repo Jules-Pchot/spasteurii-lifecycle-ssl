@@ -51,7 +51,8 @@ TWO_THRESHOLD_MIN_RATIO = 0.6  # objects whose strict area / loose area (0-1) is
 
 # 4. video output: the plain mask of every frame, bacteria in black on a white background
 PROCESS_VIDEO = True       # False = only the test frame is processed (fast, to tune the settings)
-OUTPUT_PATH = None         # where the video is saved. None = "Results/<video name>_bacteria.mp4" next to this script
+PROJECT_DIR = Path(__file__).resolve().parents[2]  # Internship/ (this file is in Video_Process_Script/Phase_Extraction/)
+OUTPUT_PATH = None         # where the video is saved. None = "Processing_Results/Stationary/<video name>_bacteria.mp4"
 # ---------------------------------------------------------------------------
 
 
@@ -225,7 +226,8 @@ def video_fps(path: str) -> float:
 
 def save_video(frames: np.ndarray, fps: float) -> None:
     """Save a grayscale video (frames, height, width) as an mp4 file."""
-    path = Path(OUTPUT_PATH) if OUTPUT_PATH else Path(__file__).resolve().parent / "Results" / f"{Path(VIDEO_PATH).stem}_bacteria.mp4"
+    default = PROJECT_DIR / "Processing_Results" / "Stationary" / f"{Path(VIDEO_PATH).stem}_bacteria.mp4"
+    path = Path(OUTPUT_PATH) if OUTPUT_PATH else default
     path.parent.mkdir(parents=True, exist_ok=True)
     writer = cv2.VideoWriter(str(path), cv2.VideoWriter_fourcc(*"mp4v"), fps, (frames.shape[2], frames.shape[1]))
     for frame in frames:

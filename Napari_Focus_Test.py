@@ -20,7 +20,7 @@ import cv2
 import numpy as np
 from skimage.measure import label
 
-sys.path.insert(0, str(Path(__file__).resolve().parent / "Video_Process_Script" / "Phase Extraction"))
+sys.path.insert(0, str(Path(__file__).resolve().parent / "Video_Process_Script" / "Phase_Extraction"))
 import Napari_Stationary_Process as base
 
 # ---------------------------------------------------------------------------

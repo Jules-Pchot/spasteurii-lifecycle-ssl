@@ -23,7 +23,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-sys.path.insert(0, str(Path(__file__).resolve().parent / "Phase Extraction"))  # where Napari_Stationary_Process.py is
+sys.path.insert(0, str(Path(__file__).resolve().parent / "Phase_Extraction"))  # where Napari_Stationary_Process.py is
 import Napari_Stationary_Process as base
 
 # ---------------------------------------------------------------------------
