@@ -22,7 +22,8 @@ The work is purely computational on existing microscopy videos — no wet-lab pr
 - **Pipeline v2 (in progress, main work):** `Video_Process_Script/Phase_Extraction_v2/`
   (`Napari_Expo_Process_v2.py`, `Napari_Stationary_Process_v2.py`, same code, only CONFIG differs).
   - No threshold in the output: intensity is kept and measured (mean / std per shape).
-  - Background = masked mean (validated), DoG filter (validated, band-pass rejected). Next:
+  - Per-frame brightness normalization (% of frame median, lamp jumps) + masked mean background
+    (to re-validate), DoG filter (validated, band-pass rejected). Next:
     per-shape measures, TIFF output (int16 + zlib), then a YOLO model (ultralytics, classes
     `in_focus` / `out_of_focus`, no phase labels).
   - Image processing with NumPy / SciPy; OpenCV only decodes the mp4.
@@ -40,6 +41,8 @@ The work is purely computational on existing microscopy videos — no wet-lab pr
 - One step at a time. For each step, propose several solutions; the user picks,
   tests visually and validates before moving on.
 - Remove comparison/test code from the main script once a method is chosen.
+- Commit to git after each step the user validates (user rule, 2026-10-19): the removed comparison
+  code then stays recoverable. Do not commit steps that are still in test.
 
 ## Research journal (Obsidian)
 - Vault folder: `/Users/juwul/Documents/Obsidian/Claude Obsidian/BacteriaSSL/`

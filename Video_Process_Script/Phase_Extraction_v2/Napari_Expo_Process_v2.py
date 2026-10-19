@@ -1,13 +1,18 @@
 """Microscopy video processing v2 (Exponential phase): no threshold, intensity is kept and measured.
 
 Pipeline v2 (one step at a time, each step is validated before the next one is added):
-  1. background removal with a masked mean                                              (validated)
+  1. brightness normalization + background removal with a masked mean                  (to re-validate)
   2. DoG filter                                                                         (validated)
   3. mean intensity and std of every shape, no threshold                                (in test)
   4. TIFF output of the whole video                                                     (to do)
 
 Step 1: the background is estimated from BG_SAMPLE_FRAMES frames spread evenly from FRAME_START to the end of
 the video (the full video does not fit in memory).
+  - normalization: the lamp brightness jumps during the videos (Stationary 163 -> 76 mean gray level, Expo
+    142 <-> 190), so every frame is divided by its own median and multiplied by 100: the background is then
+    ~100 in every frame and all values are in % of the frame median brightness (bright-field light is
+    proportional to the lamp, so the correction is a ratio). The bacteria cover a small part of the image, so
+    they barely move the median
   - pass 1: per-pixel mean over time
   - pass 2: pixels that differ from it by more than MASK_NOISE_K * noise (grown by MASK_DILATION pixels) are
             objects; the background is the mean of the remaining pixels only, so the bacteria passing over a
@@ -98,14 +103,28 @@ def noise_std(difference: np.ndarray) -> float:
     return float(1.4826 * np.median(np.abs(sample - np.median(sample))))
 
 
+def normalize(frame: np.ndarray) -> np.ndarray:
+    """Frame -> float32 in % of its own median brightness (background ~100 whatever the lamp level)."""
+    return frame.astype(np.float32) * np.float32(100 / np.median(frame.ravel()[::7]))
+
+
 def masked_mean_background(stack: np.ndarray) -> np.ndarray:
-    """Mean over time of the pixels that are NOT objects (objects found against the plain mean) -> float32."""
-    mean = stack.mean(axis=0, dtype=np.float64).astype(np.float32)
-    noise = noise_std(stack[len(stack) // 2] - mean)
+    """Mean over time of the pixels that are NOT objects (objects found against the plain mean) -> float32.
+
+    Every frame is normalized on the fly (a normalized copy of the whole stack would not fit in memory).
+    """
+    levels = np.array([np.median(frame.ravel()[::7]) for frame in stack])
+    print(f"frame median brightness: min {levels.min():.0f}, max {levels.max():.0f} (gray levels)")
+    mean = np.zeros(stack.shape[1:], dtype=np.float64)
+    for frame in stack:
+        mean += normalize(frame)
+    mean = (mean / len(stack)).astype(np.float32)
+    noise = noise_std(normalize(stack[len(stack) // 2]) - mean)
     print(f"masked mean: noise std {noise:.2f}, object if |frame - mean| > {MASK_NOISE_K * noise:.2f}")
     total = np.zeros(mean.shape, dtype=np.float64)
     count = np.zeros(mean.shape, dtype=np.uint32)
     for k, frame in enumerate(stack):
+        frame = normalize(frame)
         objects = np.abs(frame - mean) > MASK_NOISE_K * noise
         if MASK_DILATION:
             objects = ndimage.binary_dilation(objects, iterations=MASK_DILATION)
@@ -221,7 +240,7 @@ def histogram_widget(images: dict):
         axes.set_yscale("log")
         axes.set_ylabel("pixels (log)", color="#c3c2b7")
         axes.set_title(f"|{name}|", color="#f0efec", fontsize=10)
-    axes.set_xlabel("value (gray levels, or x noise std for the shapes)", color="#c3c2b7")
+    axes.set_xlabel("value (% of median brightness, or x noise std for the shapes)", color="#c3c2b7")
     figure.tight_layout()
     return figure_panel(figure)[0]
 
@@ -238,7 +257,7 @@ def profile_widget(viewer, images: dict):
     """Napari dock panel: intensity profile of every image along a line drawn in the "profile line" layer.
 
     Each profile is divided by the noise std of its own image, so the curves share one axis and read
-    directly as a signal-to-noise ratio (the DoG values are ~10x smaller in gray levels). Export: the toolbar
+    directly as a signal-to-noise ratio (the DoG values are ~10x smaller). Export: the toolbar
     save button (PNG / PDF / SVG) for the graph, the "export CSV" button for the values.
     """
     from matplotlib.figure import Figure
@@ -262,7 +281,7 @@ def profile_widget(viewer, images: dict):
             for name, image in images.items():
                 distance, values = sample_line(image, start, end)
                 last["distance (px)"] = distance
-                last[f"{name} (gray levels)"] = values
+                last[f"{name} (% brightness)"] = values
                 axes.plot(distance, values / noise[name], color=COLORS[name], linewidth=2,
                           label=f"{name} (noise std {noise[name]:.2f})")
             axes.axhline(0, color="#8a8d96", linewidth=0.8)
@@ -303,16 +322,16 @@ def main() -> None:
     indices = np.linspace(FRAME_START, n - 1, BG_SAMPLE_FRAMES).astype(int)
     print(f"video: {n} frames, background from {len(indices)} frames (one every {n / len(indices):.0f})")
     background = masked_mean_background(read_frames(VIDEO_PATH, indices))
-    frame = read_frames(VIDEO_PATH, np.array([TEST_FRAME]))[0].astype(np.float32)
-    difference = frame - background  # signed: darker AND lighter objects are kept
+    frame = read_frames(VIDEO_PATH, np.array([TEST_FRAME]))[0]
+    difference = normalize(frame) - background  # signed: darker AND lighter objects are kept
     intensity = np.abs(difference)
     print(f"noise std of frame - background: {noise_std(difference):.2f}")
     dog = dog_filter(difference)
 
     span = np.percentile(intensity, 99.9)
     viewer = napari.Viewer()
-    viewer.add_image(frame, name="original (grayscale)", colormap="gray", visible=False)
-    viewer.add_image(background, name="background (masked mean)", colormap="gray", visible=False)
+    viewer.add_image(frame, name="original (grayscale, not normalized)", colormap="gray", visible=False)
+    viewer.add_image(background, name="background (masked mean, % brightness)", colormap="gray", visible=False)
     viewer.add_image(difference, name="1 frame - background", colormap="gray", contrast_limits=(-span, span),
                      visible=False)
     viewer.add_image(intensity, name="1 intensity |frame - background|", colormap="magma",
