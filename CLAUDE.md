@@ -22,8 +22,11 @@ The work is purely computational on existing microscopy videos — no wet-lab pr
 - **Pipeline v2 (in progress, main work):** `Video_Process_Script/Phase_Extraction_v2/`
   (`Napari_Expo_Process_v2.py`, `Napari_Stationary_Process_v2.py`, same code, only CONFIG differs).
   - No threshold in the output: intensity is kept and measured (mean / std per shape).
+  - The preprocessing never classifies the growth stage: each video is one stage, both scripts run
+    the same code and differ only by CONFIG. Bacteria of interest are dark; bright shapes are
+    out-of-focus bacteria (or DoG rings), flagged, not removed.
   - Per-frame brightness normalization (% of frame median, lamp jumps) + masked mean background
-    (to re-validate), DoG filter (validated, band-pass rejected). Next:
+    (validated), DoG filter (validated, band-pass rejected). Next:
     per-shape measures, TIFF output (int16 + zlib), then a YOLO model (ultralytics, classes
     `in_focus` / `out_of_focus`, no phase labels).
   - Image processing with NumPy / SciPy; OpenCV only decodes the mp4.

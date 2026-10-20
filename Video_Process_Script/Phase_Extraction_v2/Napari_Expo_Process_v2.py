@@ -1,9 +1,9 @@
 """Microscopy video processing v2 (Exponential phase): no threshold, intensity is kept and measured.
 
 Pipeline v2 (one step at a time, each step is validated before the next one is added):
-  1. brightness normalization + background removal with a masked mean                  (to re-validate)
+  1. brightness normalization + background removal with a masked mean                  (validated)
   2. DoG filter                                                                         (validated)
-  3. mean intensity and std of every shape, no threshold                                (in test)
+  3. mean intensity and std of every shape, no threshold                                (validated)
   4. TIFF output of the whole video                                                     (to do)
 
 Step 1: the background is estimated from BG_SAMPLE_FRAMES frames spread evenly from FRAME_START to the end of
@@ -29,13 +29,22 @@ changes. Side effect: a ring of opposite sign around every object, and the insid
 band is flattened (the DoG values are not the bacteria intensity).
 Sizes are set from the measured bacteria (Expo: width ~7 px, length ~19 px).
 
-Step 3: shapes = connected regions where the DoG keeps the same sign. The DoG crosses zero on the object edges
-(Marr-Hildreth), so the edges come from the filter itself, no threshold. Every region is kept, noise included:
-each one gets its sign, position, area, the mean and std of frame - background inside it (real intensity, the
+Step 3: shapes, no threshold.
+  - A. regions where the DoG keeps the same sign (edges = DoG zero crossings, Marr-Hildreth), each one split
+       around its DoG peaks by a watershed: every local maximum of |DoG| (one per PEAK_SPACING window) seeds a
+       shape, so touching bacteria and the huge regions joined through the background are cut apart
+  - B'. the bacteria of interest are dark (BACTERIA_SIGN = -1). The DoG puts a ring of opposite sign around every
+       object; bright shapes are rings or out-of-focus bacteria (contrast inverted out of the focal plane). They
+       are NOT removed: they stay in the table with matches_bacteria_sign = 0 (examples for the YOLO step)
+Every shape gets its sign, position, area, the mean and std of frame - background inside it (real intensity, the
 DoG values are distorted) and its DoG peak, also divided by the DoG noise std (signal-to-noise ratio). The
-histogram of that ratio over the shapes is expected bimodal (noise regions vs bacteria). Table exportable as CSV.
+histogram of that ratio over the dark shapes is expected bimodal (noise vs bacteria). Table exportable as CSV.
 
-Image processing is done with NumPy / SciPy. OpenCV is only used to decode the mp4 (SciPy cannot read video).
+The processing does not classify the growth stage: each video is one stage, and the Expo and Stationary scripts
+run the same code; only the CONFIG differs (video, magnification-dependent sizes).
+
+Image processing is done with NumPy / SciPy (+ the masked watershed of scikit-image, SciPy has none with a mask).
+OpenCV is only used to decode the mp4 (SciPy cannot read video).
 
 Run with: python Napari_Expo_Process_v2.py
 """
@@ -45,6 +54,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 from scipy import ndimage
+from skimage.segmentation import watershed
 
 # ---------------------------------------------------------------------------
 # CONFIG
@@ -60,7 +70,11 @@ MASK_DILATION = 3          # object masks are grown by this many pixels (catches
 DOG_SIGMA_SMALL = 2.0      # DoG: small blur (pixels), ~ bacteria width / (2 * sqrt(3))
 DOG_RATIO = 1.6            # DoG: large blur = small blur * this ratio (1.6 = closest to a Laplacian of Gaussian)
 
-HIST_BINS = 256            # bins of the intensity histograms
+PEAK_SPACING = 10          # shapes: one DoG peak (watershed seed) per window of this size (pixels), ~ half a bacterium length
+BACTERIA_SIGN = -1         # shapes: the bacteria of interest are dark (-1); bright shapes are flagged, not removed
+
+HIST_BINS = 256            # bins of the pixel histograms
+SHAPE_HIST_BINS = 50       # bins of the shape histogram (few shapes per bin with more bins: jagged curve)
 PROJECT_DIR = Path(__file__).resolve().parents[2]  # Internship/ (this file is in Video_Process_Script/Phase_Extraction_v2/)
 # ---------------------------------------------------------------------------
 
@@ -148,17 +162,37 @@ COLORS = {"frame - background": "#3987e5", "DoG": "#d95926", "shapes: DoG peak /
 PANEL = "#262930"          # napari dark theme background
 
 
-def dog_regions(dog: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    """DoG -> (label image, sign per label). Every connected region of DoG > 0 or DoG < 0 is a shape.
+def split_sign_region(dog: np.ndarray, sign: int) -> np.ndarray:
+    """Pixels where the DoG has `sign` -> label image (0 elsewhere), each region split around its |DoG| peaks.
 
-    Labels 1..n_pos are positive regions, the next ones negative regions; sign[0] = 0 (no pixel has DoG = 0
-    exactly in practice, they keep label 0).
+    Seeds: local maxima of |DoG| inside the region (one per PEAK_SPACING window), plus the maximum of any region
+    that got no seed. The watershed is masked to the region, so a shape never crosses a zero crossing.
     """
-    positive, n_pos = ndimage.label(dog > 0)
-    negative, n_neg = ndimage.label(dog < 0)
-    labels = np.where(negative > 0, negative + n_pos, positive).astype(np.int32)
-    sign = np.concatenate([[0], np.ones(n_pos), -np.ones(n_neg)]).astype(np.int8)
-    return labels, sign
+    inside = np.sign(dog) == sign
+    strength = np.where(inside, np.abs(dog), 0)
+    seeds, n_seeds = ndimage.label(inside & (strength == ndimage.maximum_filter(strength, PEAK_SPACING)))
+    regions, n_regions = ndimage.label(inside)
+    missing = np.setdiff1d(np.arange(1, n_regions + 1), regions[seeds > 0])
+    for k, position in enumerate(ndimage.maximum_position(strength, regions, index=missing)):
+        seeds[position] = n_seeds + k + 1
+    return watershed(-strength, seeds, mask=inside)               # floods from the peaks down to the zero crossings
+
+
+def dog_regions(dog: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """DoG -> (label image, sign per label): dark (DoG < 0) and bright (DoG > 0) shapes, split around their peaks.
+
+    Labels are renumbered 1..n with no gap; sign[0] = 0 (label 0 = pixels with DoG exactly 0, none in practice).
+    """
+    labels = np.zeros(dog.shape, dtype=np.int32)
+    sign = [0]
+    for s in (-1, 1):
+        part = split_sign_region(dog, s)
+        present = np.unique(part[part > 0])
+        lookup = np.zeros(part.max() + 1, dtype=np.int32)
+        lookup[present] = np.arange(len(sign), len(sign) + len(present))
+        labels[part > 0] = lookup[part[part > 0]]
+        sign += [s] * len(present)
+    return labels, np.array(sign, dtype=np.int8)
 
 
 def measure_shapes(labels: np.ndarray, sign: np.ndarray, difference: np.ndarray, dog: np.ndarray) -> dict:
@@ -180,7 +214,8 @@ def measure_shapes(labels: np.ndarray, sign: np.ndarray, difference: np.ndarray,
     return {"label": np.arange(n), "sign": sign,
             "row": np.bincount(flat, weights=rows.ravel(), minlength=n) / safe,
             "col": np.bincount(flat, weights=cols.ravel(), minlength=n) / safe,
-            "area": area, "mean": mean, "std": std, "dog_peak": peak, "dog_snr": np.abs(peak) / noise_std(dog)}
+            "area": area, "mean": mean, "std": std, "dog_peak": peak, "dog_snr": np.abs(peak) / noise_std(dog),
+            "matches_bacteria_sign": (sign == BACTERIA_SIGN).astype(np.int8)}
 
 
 def shapes_widget(shapes: dict):
@@ -193,7 +228,7 @@ def shapes_widget(shapes: dict):
         default = PROJECT_DIR / "Processing_Results" / f"{Path(VIDEO_PATH).stem}_frame{TEST_FRAME}_shapes.csv"
         path, _ = QFileDialog.getSaveFileName(button, "export shapes", str(default), "CSV (*.csv)")
         if path:  # the dialog asks before replacing an existing file
-            np.savetxt(path, np.column_stack([v[1:] for v in shapes.values()]), delimiter=",", fmt="%.4f",
+            np.savetxt(path, np.column_stack([v[1:] for v in shapes.values()]), delimiter=",", fmt="%.6g",
                        header=",".join(shapes), comments="")
             print(f"shapes saved: {path}")
 
@@ -232,7 +267,8 @@ def histogram_widget(images: dict):
     figure = Figure(figsize=(5, 2.2 * len(images)), facecolor=PANEL)
     for k, (name, image) in enumerate(images.items()):
         values = np.abs(image)
-        edges = np.linspace(0, np.percentile(values, 99.9), HIST_BINS + 1)
+        bins = HIST_BINS if image.ndim == 2 else SHAPE_HIST_BINS  # 1D = one value per shape
+        edges = np.linspace(0, np.percentile(values, 99.9), bins + 1)
         counts, _ = np.histogram(values, bins=edges)
         axes = figure.add_subplot(len(images), 1, k + 1)
         style_axes(axes)
@@ -341,19 +377,31 @@ def main() -> None:
     viewer.add_image(np.abs(dog), name="2 DoG |intensity|", colormap="magma", contrast_limits=(0, limit))
     labels, sign = dog_regions(dog)
     shapes = measure_shapes(labels, sign, difference, dog)
-    snr = shapes["dog_snr"][1:]
-    print(f"shapes: {len(snr)} ({(sign > 0).sum()} DoG > 0, {(sign < 0).sum()} DoG < 0), "
-          f"DoG peak / noise std: median {np.median(snr):.1f}, p99 {np.percentile(snr, 99):.1f}, max {snr.max():.1f}")
+    bacteria = shapes["matches_bacteria_sign"].astype(bool)
+    snr = shapes["dog_snr"][bacteria]
+    print(f"shapes: {len(sign) - 1} ({bacteria.sum()} with the bacteria sign, {(~bacteria[1:]).sum()} opposite), "
+          f"bacteria-sign DoG peak / noise std: median {np.median(snr):.1f}, p99 {np.percentile(snr, 99):.1f}, "
+          f"max {snr.max():.1f}, largest area {shapes['area'][bacteria].max():.0f} px")
     features = {name: values for name, values in shapes.items() if name != "label"}
     features["index"] = shapes["label"]
-    viewer.add_labels(labels, name="3 shapes (DoG sign regions)", features=features, opacity=0.4, visible=False)
     for name, colormap in [("mean", "twilight_shifted"), ("std", "magma"), ("dog_snr", "magma")]:
-        painted = shapes[name][labels].astype(np.float32)
+        painted = np.where(bacteria[labels], shapes[name][labels], 0).astype(np.float32)
         limit = np.percentile(np.abs(painted), 99.9)
-        viewer.add_image(painted, name=f"3 shape {name}", colormap=colormap, visible=False,
+        viewer.add_image(painted, name=f"3 shape {name} (bacteria sign)", colormap=colormap, visible=False,
                          contrast_limits=(-limit, limit) if name == "mean" else (0, limit))
-    images = {"frame - background": difference, "DoG": dog, "shapes: DoG peak / noise std": snr}
-    viewer.window.add_dock_widget(histogram_widget(images), name="bimodal histograms", area="right")
+    # opposite sign colored by signal-to-noise: the noise shapes stay dark, the out-of-focus bacteria light up
+    painted = np.where(bacteria[labels], 0, shapes["dog_snr"][labels]).astype(np.float32)
+    viewer.add_image(painted, name="3 shape dog_snr (opposite sign)", colormap="magma", visible=False,
+                     contrast_limits=(0, np.percentile(painted, 99.9)))
+    # outlines only, to be laid over "1 frame - background" (hover shows the shape measures)
+    for name, keep, visible in [("bacteria sign (dark)", bacteria, True),
+                                ("opposite sign (rings, out of focus)", ~bacteria, False)]:
+        layer = viewer.add_labels(np.where(keep[labels], labels, 0), name=f"3 shapes, {name}", features=features,
+                                  visible=visible)
+        layer.contour = 2
+    images = {"frame - background": difference, "DoG": dog}
+    histograms = {**images, "shapes: DoG peak / noise std": snr}
+    viewer.window.add_dock_widget(histogram_widget(histograms), name="bimodal histograms", area="right")
     viewer.window.add_dock_widget(shapes_widget(shapes), name="shapes table", area="right")
     viewer.window.add_dock_widget(profile_widget(viewer, images), name="intensity profile", area="right")
     napari.run()
