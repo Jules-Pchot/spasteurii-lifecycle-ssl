@@ -26,9 +26,12 @@ The work is purely computational on existing microscopy videos — no wet-lab pr
     the same code and differ only by CONFIG. Bacteria of interest are dark; bright shapes are
     out-of-focus bacteria (or DoG rings), flagged, not removed.
   - Per-frame brightness normalization (% of frame median, lamp jumps) + masked mean background
-    (validated), DoG filter (validated, band-pass rejected). Next:
-    per-shape measures, TIFF output (int16 + zlib), then a YOLO model (ultralytics, classes
-    `in_focus` / `out_of_focus`, no phase labels).
+    (validated), DoG filter (validated, band-pass rejected), shapes = DoG sign regions split
+    by a masked watershed, mean / std on frame - background (validated). Whole-video TIFF output:
+    postponed by the user (2026-10-20). Moving average (step 5) not needed for now (normalization
+    leaves a ±0.5 % offset). Then a YOLO model (ultralytics, classes `in_focus` / `out_of_focus`).
+  - YOLO labels are drawn **by hand** by the user (decision 2026-10-20), focus classes only. This is
+    the one manual annotation of the project: the growth stage is never annotated.
   - Image processing with NumPy / SciPy; OpenCV only decodes the mp4.
   - Bimodal intensity histograms are shown in a napari dock panel.
 - Source videos (v2): external drive `/Volumes/Extreme SSD/Video_test/` (`Expo.mp4`, `Stationary.mp4`).

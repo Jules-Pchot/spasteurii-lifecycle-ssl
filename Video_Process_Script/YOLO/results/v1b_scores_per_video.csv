@@ -1,0 +1,7 @@
+val set,class,precision,recall,mAP50,mAP50-95
+all,in_focus,0.46,0.571,0.458,0.223
+all,out_of_focus,0.451,0.323,0.278,0.1
+Expo,in_focus,0.456,0.592,0.471,0.229
+Expo,out_of_focus,0.441,0.323,0.29,0.1
+Stationary,in_focus,0.189,0.429,0.224,0.11
+Stationary,out_of_focus,0.304,0.432,0.297,0.126

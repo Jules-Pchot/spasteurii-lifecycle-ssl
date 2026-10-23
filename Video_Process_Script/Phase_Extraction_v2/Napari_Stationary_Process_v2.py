@@ -4,7 +4,7 @@ Pipeline v2 (one step at a time, each step is validated before the next one is a
   1. brightness normalization + background removal with a masked mean                  (validated)
   2. DoG filter                                                                         (validated)
   3. mean intensity and std of every shape, no threshold                                (validated)
-  4. TIFF output of the whole video                                                     (to do)
+  4. TIFF output of the whole video                                                     (postponed)
 
 Step 1: the background is estimated from BG_SAMPLE_FRAMES frames spread evenly from FRAME_START to the end of
 the video (the full video does not fit in memory).
