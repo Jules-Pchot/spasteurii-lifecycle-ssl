@@ -34,6 +34,13 @@ The work is purely computational on existing microscopy videos — no wet-lab pr
     the one manual annotation of the project: the growth stage is never annotated.
   - Image processing with NumPy / SciPy; OpenCV only decodes the mp4.
   - Bimodal intensity histograms are shown in a napari dock panel.
+- **YOLO focus detector: chapter closed (2026-10-23).** `Video_Process_Script/YOLO/`, run `v2_yolo11n`
+  (Expo in_focus mAP50 0.50). Published as code + metrics only: no weights, no microscopy images.
+- **Motion track (2026-10-26 →):** `Video_Process_Script/Motion_Tracking/`. Concept notebooks (marimo,
+  `marimo run`, code hidden) on a synthetic simulator in µm / s with values from `Research Report.pdf`
+  (no kinematic data published for S. pasteurii: proxies only). Next step: optical flow analysis.
+- **New acquisitions (protocol):** `Data_Collection/SPasteurii_Data_Collection_Process.tex` (user's text,
+  approved changes only). ×40, 1080p, 30 fps (≥ 17), 10 s clips, 96-well plates, 12 cultures per medium.
 - Source videos (v2): external drive `/Volumes/Extreme SSD/Video_test/` (`Expo.mp4`, `Stationary.mp4`).
   Too big for RAM: the background is estimated from frames sampled over the video.
 - Magnifications: Expo ×40 throughout; Stationary ×40 then ×100 (objective change at frames
