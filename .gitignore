@@ -42,10 +42,7 @@ Research Report.pdf
 Video_Process_Script/Motion_Tracking/Protocole_Mobilite_Calculs.md
 Video_Process_Script/Motion_Tracking/Quiz_Concepts.md
 Video_Process_Script/Optic_Flow/03_Local_DIC.py
-Video_Process_Script/Optic_Flow/03_Trackpy.py
-Video_Process_Script/Optic_Flow/04_Scale_Space.py
 Video_Process_Script/Optic_Flow/04_Scale_Space_Analysis.ipynb
 Video_Process_Script/Optic_Flow/Analyse Heightmap.txt
-Video_Process_Script/Process_All_Phases.py
 from in to out of focus.txt
 output.png

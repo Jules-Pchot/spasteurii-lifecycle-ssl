@@ -1,6 +1,8 @@
-"""Optic flow track, step 2: background removal on the stabilized Expo3 by a rolling masked mean.
+"""Optic flow track, step 2: background removal by a rolling masked mean (VIDEO chosen in CONFIG).
 
-Input: the output of 01_Stabilize.py (stabilized TIFF, 0 = no data, + the shifts CSV with the reliable flag).
+Input: Expo3 = the output of 01_Stabilize.py (stabilized TIFF, 0 = no data, + the shifts CSV with the reliable
+flag). 0003 (11:18-13:00 of 0003.mp4, 2026-11-10) = the 1080p TIFF of video_to_tiff.py directly, without
+stabilization (user choice): every pixel has data, every frame is reliable, one segment, times from the TIFF.
 The video is cut into SEGMENTS, the stable passages processed separately (frames 387-414 show another field and
 focal plane: the operator moved the stage and came back). Inside a segment, the frames flagged unreliable by
 step 1 (out of focus) are kept in the output but never used to estimate a background.
@@ -38,10 +40,17 @@ from scipy import ndimage
 # CONFIG
 # ---------------------------------------------------------------------------
 DATA_DIR = Path("/Volumes/Extreme SSD/TIFFIle/Optic_Flow")
-STABILIZED_TIFF = DATA_DIR / "Expo3_1_stabilized.tif"
-SHIFTS_CSV = DATA_DIR / "Expo3_1_shifts.csv"
-SEGMENTS = [(0, 386), (415, 962)]  # stable passages, first and last frame included
-SHOW_SEGMENT = 1                   # segment opened in napari (index in SEGMENTS)
+VIDEOS = {  # segments = stable passages, first and last frame included; show = segment opened in napari
+    "Expo3": {"input": DATA_DIR / "Expo3_1_stabilized.tif", "shifts": DATA_DIR / "Expo3_1_shifts.csv",
+              "segments": [(0, 386), (415, 962)], "show": 1},
+    "0003": {"input": DATA_DIR.parent / "0003_678-780s_1080p_gray.tif", "shifts": None,  # not stabilized
+             "segments": [(0, 291)], "show": 0},
+}
+VIDEO = "0003"
+STABILIZED_TIFF = VIDEOS[VIDEO]["input"]
+SHIFTS_CSV = VIDEOS[VIDEO]["shifts"]
+SEGMENTS = VIDEOS[VIDEO]["segments"]
+SHOW_SEGMENT = VIDEOS[VIDEO]["show"]
 MASK_NOISE_K = 3.0                 # a pixel is an object if |frame - mean| > this * noise std
 MASK_DILATION = 3                  # object masks are grown by this many pixels (catches faint edges)
 ROLLING_WINDOW = 51                # frames in the rolling mean (~14 s at 3.6 fps), odd
@@ -51,7 +60,7 @@ PANEL = "#262930"                  # napari dark theme background
 
 def segment_name(segment: int) -> str:
     start, end = SEGMENTS[segment]
-    return f"Expo3_2_seg{segment}_{start}-{end}"
+    return f"{VIDEO}_2_seg{segment}_{start}-{end}"
 
 
 def output_paths(segment: int) -> dict:
@@ -70,7 +79,7 @@ def noise_std(values: np.ndarray) -> float:
 
 def normalize(frame: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """Stabilized frame -> (float32 in % of its median brightness, pixels with data)."""
-    valid = frame > 0
+    valid = frame > 0 if SHIFTS_CSV else np.ones(frame.shape, dtype=bool)  # 0 = no data after stabilization
     scale = np.float32(100 / np.median(frame[valid][::7]))
     return frame.astype(np.float32) * scale, valid
 
@@ -239,10 +248,15 @@ def stats_widget(viewer, table: dict):
 def main() -> None:
     import napari  # imported here so the functions can be used without a GUI
 
-    with open(SHIFTS_CSV) as f:
-        rows = list(csv.DictReader(f))
-    reliable = np.array([r["reliable"] == "1" for r in rows])
-    times = np.array([float(r["time_s"]) for r in rows])
+    if SHIFTS_CSV:
+        with open(SHIFTS_CSV) as f:
+            rows = list(csv.DictReader(f))
+        reliable = np.array([r["reliable"] == "1" for r in rows])
+        times = np.array([float(r["time_s"]) for r in rows])
+    else:
+        with tifffile.TiffFile(STABILIZED_TIFF) as tif:
+            times = np.array(json.loads(tif.pages[0].description)["timestamps_s"])
+        reliable = np.ones(len(times), dtype=bool)
     stabilized = None
     for segment in range(len(SEGMENTS)):
         if not all(p.exists() for p in output_paths(segment).values()):
@@ -261,8 +275,8 @@ def main() -> None:
     table = {key: np.array([float(r[key]) for r in rows]) for key in rows[0]}
     span = 4 * np.median(table["rolling_noise"])
 
-    viewer = napari.Viewer(title=f"Expo3 segment {SHOW_SEGMENT}: frames {start}-{end} (slider 0 = frame {start})")
-    viewer.add_image(lazy(STABILIZED_TIFF)[start:end + 1], name="1 stabilized", colormap="gray",
+    viewer = napari.Viewer(title=f"{VIDEO} segment {SHOW_SEGMENT}: frames {start}-{end} (slider 0 = frame {start})")
+    viewer.add_image(lazy(STABILIZED_TIFF)[start:end + 1], name="1 stabilized" if SHIFTS_CSV else "1 input (not stabilized)", colormap="gray",
                      contrast_limits=(0, 255), visible=False)
     viewer.add_image(tifffile.imread(paths["background"]), name="2 fallback background (segment masked mean, %)",
                      colormap="gray", visible=False)

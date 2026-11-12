@@ -11,7 +11,7 @@ from skimage.measure import label, regionprops
 # ---------------------------------------------------------------------------
 # CONFIG
 # ---------------------------------------------------------------------------
-VIDEO_PATH = "/Users/juwul/Desktop/Internship/Videosplit/Expo/Expo copie_split_018.mp4"
+VIDEO_PATH = "/Users/juwul/Desktop/Internship/Expo copie_split_018.mp4"
 CONTRAST_LIMITS = (0, 60)  # display range of the subtracted video (differences are small)
 
 BLUR_SIGMA = 1          # smoothing before thresholding (higher = less noise, fatter objects)
