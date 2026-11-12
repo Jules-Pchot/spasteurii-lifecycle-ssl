@@ -30,3 +30,22 @@ toy_dataset/
 
 # marimo session cache
 __marimo__/
+
+# Local files kept out of git (user, 2026-11-12). In-test scripts here: remove their line before committing them
+Data_Collection/SPasteurii_Data_Collection_Process.aux
+Data_Collection/SPasteurii_Data_Collection_Process.log
+Data_Collection/SPasteurii_Data_Collection_Process.out
+Data_Collection/SPasteurii_Data_Collection_Process.pdf
+Data_Collection/SPasteurii_Data_Collection_Process.tex
+Data_Collection/figures/growth_curve.jpg
+Research Report.pdf
+Video_Process_Script/Motion_Tracking/Protocole_Mobilite_Calculs.md
+Video_Process_Script/Motion_Tracking/Quiz_Concepts.md
+Video_Process_Script/Optic_Flow/03_Local_DIC.py
+Video_Process_Script/Optic_Flow/03_Trackpy.py
+Video_Process_Script/Optic_Flow/04_Scale_Space.py
+Video_Process_Script/Optic_Flow/04_Scale_Space_Analysis.ipynb
+Video_Process_Script/Optic_Flow/Analyse Heightmap.txt
+Video_Process_Script/Process_All_Phases.py
+from in to out of focus.txt
+output.png
