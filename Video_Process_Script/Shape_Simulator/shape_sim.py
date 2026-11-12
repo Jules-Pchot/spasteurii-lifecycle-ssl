@@ -293,7 +293,8 @@ def export(n, name):
         for phase, (img, _, row) in simulate_lineage(i).items():
             fname = f"{phase}/{phase}_{i:05d}.png"
             Image.fromarray((img * 255).round().astype(np.uint8)).save(out / fname)
-            rows.append({"file": fname, **row})
+            # filename = bare name, the key PhenoMe matches images on (unique: the phase is in the name)
+            rows.append({"filename": Path(fname).name, "file": fname, **row})
     pd.DataFrame(rows).to_csv(out / "labels.csv", index=False)
     params = {k: v for k, v in globals().items() if k.isupper()}
     (out / "parameters.txt").write_text("\n".join(f"{k} = {v!r}" for k, v in params.items()) + "\n")
